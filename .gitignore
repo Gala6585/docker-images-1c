@@ -1,0 +1,16 @@
+.env
+*.deb
+*.rpm
+*.epf
+*.erf
+*.dt
+*.1CD
+*.pfx
+*.pem
+*.key
+*.crt
+allure-results/
+allure-report/
+vanessa-logs/
+!distr/**/.gitkeep
+

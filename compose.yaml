@@ -1,0 +1,9 @@
+services:
+  vanessa:
+    image: ${DOCKER_REGISTRY_URL}/vanessa-runner-allure:${ONEC_FULL_VERSION}-vr${VANESSA_RUNNER_VERSION}-allure${ALLURE_VERSION}
+    environment:
+      TEST_BASE_CONNECTION_STRING: ${TEST_BASE_CONNECTION_STRING:?required}
+      TEST_BASE_USER: ${TEST_BASE_USER:-}
+      TEST_BASE_PASSWORD: ${TEST_BASE_PASSWORD:-}
+    volumes:
+      - ./:/workspace

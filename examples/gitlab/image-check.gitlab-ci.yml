@@ -1,0 +1,14 @@
+image_check:
+  image:
+    name: docker.devops.stng.ru/devops/docker-images/vanessa-runner-allure:<immutable-tag>
+    entrypoint: [""]
+  tags: [microk8s]
+  script:
+    - command -v 1cv8c
+    - ldd "$(command -v 1cv8c)"
+    - command -v xvfb-run
+    - command -v dbus-run-session
+    - oscript -version
+    - vrunner --help
+    - allure --version
+

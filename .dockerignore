@@ -1,0 +1,14 @@
+.git
+.github
+.env
+*.md
+examples
+docs
+allure-results
+allure-report
+vanessa-logs
+distr/ca
+**/*.key
+**/*.pem
+**/*.crt
+
