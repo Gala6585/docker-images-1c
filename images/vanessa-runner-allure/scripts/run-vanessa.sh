@@ -16,7 +16,7 @@ cd "$CI_PROJECT_DIR"
 for file in "$VANESSA_EPF" "$VA_PARAMS"; do [[ -f "$file" ]] || { echo "Файл не найден: $file" >&2; exit 1; }; done
 [[ -d "$FEATURES_PATH" ]] || { echo "Каталог feature-файлов не найден: $FEATURES_PATH" >&2; exit 1; }
 for cmd in "$V8_PATH" xvfb-run dbus-run-session vrunner timeout; do command -v "$cmd" >/dev/null || { echo "Команда не найдена: $cmd" >&2; exit 1; }; done
-if ldd "$V8_PATH" | grep -q 'not found'; then ldd "$V8_PATH" >&2; exit 1; fi
+/usr/local/lib/onec/verify-platform.sh
 mkdir -p "$ALLURE_RESULTS_DIR" "$ALLURE_REPORT_DIR" "$VANESSA_LOG_DIR"
 
 connection=(/IBConnectionString "$TEST_BASE_CONNECTION_STRING")

@@ -5,10 +5,9 @@ image_check:
   tags: [microk8s]
   script:
     - command -v 1cv8c
-    - ldd "$(command -v 1cv8c)"
+    - /usr/local/lib/onec/verify-platform.sh
     - command -v xvfb-run
     - command -v dbus-run-session
     - oscript -version
     - vrunner --help
     - allure --version
-
