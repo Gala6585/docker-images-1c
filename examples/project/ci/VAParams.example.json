@@ -1,7 +1,0 @@
-{
-  "КаталогФич": "features",
-  "ВыполнитьСценарии": true,
-  "ДелатьОтчетВФорматеAllure": true,
-  "КаталогOutputAllure": "allure-results"
-}
-
