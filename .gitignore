@@ -1,5 +1,6 @@
 .env
 *.deb
+distr/oscript/*.zip
 *.rpm
 *.epf
 *.erf
@@ -13,4 +14,3 @@ allure-results/
 allure-report/
 vanessa-logs/
 !distr/**/.gitkeep
-

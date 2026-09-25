@@ -22,11 +22,13 @@ mkdir -p "$ALLURE_RESULTS_DIR" "$ALLURE_REPORT_DIR" "$VANESSA_LOG_DIR"
 connection=(/IBConnectionString "$TEST_BASE_CONNECTION_STRING")
 [[ -n "${TEST_BASE_USER:-}" ]] && connection+=(/N "$TEST_BASE_USER")
 [[ -n "${TEST_BASE_PASSWORD:-}" ]] && connection+=(/P "$TEST_BASE_PASSWORD")
-platform=("$V8_PATH" ENTERPRISE "${connection[@]}" /Execute "$VANESSA_EPF" /C"StartFeaturePlayer;VBParams=$VA_PARAMS")
+platform=("$V8_PATH" ENTERPRISE "${connection[@]}" /TESTMANAGER /UseHwLicenses- \
+  /Execute "$VANESSA_EPF" /C"StartFeaturePlayer;VAParams=$VA_PARAMS" \
+  /DisableStartupDialogs /DisableStartupMessages /Out "$VANESSA_LOG_DIR/onec.log")
 echo "Запуск Vanessa Automation; пароль и строка подключения скрыты"
 set +e
 NO_AT_BRIDGE=1 timeout --signal=TERM --kill-after=30s "$VANESSA_TIMEOUT_SECONDS" \
-  dbus-run-session -- xvfb-run -a -s "-screen 0 1280x1024x24" \
+  dbus-run-session -- xvfb-run -a -s "-screen 0 1920x1080x24" \
   "${platform[@]}" >"$VANESSA_LOG_DIR/platform.log" 2>&1
 status=$?
 set -e

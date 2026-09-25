@@ -6,7 +6,7 @@ ARG ALLURE_VERSION=2.29.0
 ARG ALLURE_SHA256=""
 COPY images/vanessa-runner-allure/scripts/ /usr/local/bin/
 RUN apt-get update \
- && apt-get install -y --no-install-recommends default-jre-headless curl tar coreutils \
+ && apt-get install -y --no-install-recommends default-jre-headless curl tar coreutils jq zip imagemagick \
  && archive="/tmp/allure-${ALLURE_VERSION}.tgz" \
  && curl --fail --location --retry 3 --output "$archive" \
       "https://github.com/allure-framework/allure2/releases/download/${ALLURE_VERSION}/allure-${ALLURE_VERSION}.tgz" \

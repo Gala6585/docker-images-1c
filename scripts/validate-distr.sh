@@ -17,7 +17,9 @@ done
 base_count=0; for p in "${thin[@]}"; do [[ "$(basename "$p")" != *thin-client-nls* ]] && ((base_count+=1)); done
 ((base_count == 1)) || { echo "Ожидался один основной thin-client пакет, найдено: $base_count" >&2; exit 1; }
 if [[ "$INSTALL_OSCRIPT_FROM_LOCAL" == true ]]; then
-  oscript=("$REPO_ROOT"/distr/oscript/*.deb); ((${#oscript[@]} > 0)) || { echo "Не найден OneScript .deb в distr/oscript" >&2; exit 1; }
+  oscript=("$REPO_ROOT/distr/oscript/OneScript-${OSCRIPT_VERSION}-linux-x64.zip")
+  [[ -f "${oscript[0]}" ]] || { echo "Не найден ${oscript[0]}" >&2; exit 1; }
+  echo "$OSCRIPT_SHA256  ${oscript[0]}" | sha256sum -c -
 else
   [[ "$OSCRIPT_VERSION" != latest ]] || { echo "OSCRIPT_VERSION должен быть фиксированным" >&2; exit 1; }
   [[ "$OSCRIPT_SHA256" =~ ^[0-9a-fA-F]{64}$ ]] || { echo "OSCRIPT_SHA256 должен содержать 64 hex-символа" >&2; exit 1; }

@@ -12,11 +12,24 @@
    `DOCKER_REGISTRY_URL=docker.devops.stng.ru/devops/docker-images`.
 2. Поместите пакеты `*thin-client*.deb` версии `ONEC_FULL_VERSION` для `amd64` в
    `distr/1c/`; не добавляйте пакеты common/client/server/ws/crs.
-3. По умолчанию OneScript 1.9.4 загружается из официального GitHub Release и
-   обязательно проверяется по `OSCRIPT_SHA256`. Для закрытой сети задайте
-   `INSTALL_OSCRIPT_FROM_LOCAL=true` и положите `.deb` в `distr/oscript/`.
+3. Скачайте официальный `OneScript-2.0.1-linux-x64.zip`, проверьте SHA-256 и
+   положите его в `distr/oscript/`. По умолчанию используется закрытый режим
+   `INSTALL_OSCRIPT_FROM_LOCAL=true`. При явном значении `false` тот же архив
+   загружается из GitHub Release; checksum проверяется в обоих режимах.
 4. Выполните `make validate`, затем `make build-all` и проверки `make check-*`.
 5. Выполните `docker login docker.devops.stng.ru` и `make push-all`.
+
+Образ для распаковки файлов 1С в GitLab CI собирается отдельно из фиксированного
+commit репозитория `Gala6585/v8unpack`:
+
+```bash
+make build-v8unpack
+make check-v8unpack
+make push-v8unpack
+```
+
+Во время GitLab job пакеты не устанавливаются: `v8unpack`, Python, Git и
+системные утилиты уже находятся в опубликованном образе.
 
 Production-сборка выполняется только локально или на внутреннем/self-hosted
 Runner. Публичные GitHub Actions выполняют лишь lint и безопасную validation.
@@ -40,3 +53,14 @@ DBus/Xvfb с timeout и пишет логи. Затем `generate-allure-report`
 Подробности: [архитектура](docs/architecture.md), [сборка](docs/build.md),
 [registry](docs/registry.md), [GitLab Runner](docs/gitlab-runner.md) и
 [решение проблем](docs/troubleshooting.md).
+
+Инструкции по развёртыванию и эксплуатации:
+
+- для администратора: [Markdown](docs/deployment-admin.md) и
+  [Word](docs/Инструкция_администратора_контур_качества_1С.docx);
+- для пользователя: [Markdown](docs/deployment-user.md) и
+  [Word](docs/Инструкция_пользователя_контур_качества_1С.docx).
+
+Общее устройство и функциональные возможности контура описаны в
+[архитектурной записке](docs/architecture-note.md). Также доступна
+[версия в формате Word](docs/Архитектурная_записка_контур_качества_1С.docx).

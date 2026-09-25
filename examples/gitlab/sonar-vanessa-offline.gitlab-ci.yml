@@ -1,0 +1,248 @@
+stages:
+  - unpack_and_commit
+  - sonar-analysis
+  - vanessa-test
+  - publish
+
+variables:
+  MOUNTED_1C_ROOT: "/mnt/win_devops_1C"
+  CONFIG_NAME: "Docflow"
+  DEVELOPER_NAME: "Kazimirov"
+  DEVELOPERS_MAP_FILE: "ci/developers.map"
+
+  # В образе должны быть заранее установлены Python, Git, CA certificates,
+  # findutils и v8unpack. Джоба ничего не скачивает и не устанавливает.
+  V8UNPACK_IMAGE: "docker.devops.stng.ru/devops/docker-images/v8unpack:1.2.9"
+  VANESSA_IMAGE: "docker.devops.stng.ru/devops/docker-images/vanessa-runner-allure:8.5.1.1343-vr2.6.1-allure2.29.0"
+
+  VANESSA_TIMEOUT_SECONDS: "1800"
+  ALLURE_RESULTS_DIR: "allure-results"
+  ALLURE_REPORT_DIR: "allure-report"
+  VANESSA_LOG_DIR: "vanessa-logs"
+
+  SONAR_USER_HOME: "${CI_PROJECT_DIR}/.sonar"
+  GIT_DEPTH: "0"
+  SONAR_TRUSTSTORE_PATH: "/tmp/sonar-truststore.jks"
+  SONAR_TRUSTSTORE_PASSWORD: "changeit"
+
+.pipeline_rules: &pipeline_rules
+  - if: '$RUN_SOURCE == "rundeck"'
+    when: on_success
+  - if: '$CI_PIPELINE_SOURCE == "web"'
+    when: on_success
+  - when: never
+
+unpack_job:
+  stage: unpack_and_commit
+  image:
+    name: $V8UNPACK_IMAGE
+    entrypoint: [""]
+  resource_group: "v8unpack-repository-push"
+  rules:
+    - if: '$RUN_SOURCE == "rundeck"'
+      when: on_success
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+      when: manual
+    - when: never
+  allow_failure: false
+  before_script:
+    - set -euo pipefail
+    - |
+      if [ -n "${GIT_SSL_CAINFO:-}" ] && [ -f "$GIT_SSL_CAINFO" ]; then
+        cp "$GIT_SSL_CAINFO" /usr/local/share/ca-certificates/gitlab-ca.crt
+        update-ca-certificates
+      fi
+    - command -v git
+    - command -v v8unpack
+  script:
+    - set -euo pipefail
+    - |
+      test -n "${DEVELOPER_NAME:-}" || { echo "ERROR: DEVELOPER_NAME is empty"; exit 1; }
+      test -n "${CONFIG_NAME:-}" || { echo "ERROR: CONFIG_NAME is empty"; exit 1; }
+      case "$DEVELOPER_NAME" in *"/"*|*".."*) echo "ERROR: Invalid DEVELOPER_NAME"; exit 1 ;; esac
+      case "$CONFIG_NAME" in *"/"*|*".."*) echo "ERROR: Invalid CONFIG_NAME"; exit 1 ;; esac
+
+      export MOUNTED_1C_DIR="${MOUNTED_1C_ROOT}/${DEVELOPER_NAME}/${CONFIG_NAME}"
+      export CF_REPO_DIR="cf"
+      export CFE_REPO_DIR="cfe"
+      export EPF_REPO_DIR="epf"
+      export ERF_REPO_DIR="erf"
+      export SRC_REPO_DIR="src"
+      export TMP_UNPACKED_DIR=".tmp_unpacked/${DEVELOPER_NAME}"
+    - |
+      test -f "$DEVELOPERS_MAP_FILE" || { echo "ERROR: $DEVELOPERS_MAP_FILE not found"; exit 1; }
+      AUTHOR_LINE="$(awk -F';' -v dev="$DEVELOPER_NAME" '$1 == dev {print; exit}' "$DEVELOPERS_MAP_FILE")"
+      test -n "$AUTHOR_LINE" || { echo "ERROR: Developer not found in $DEVELOPERS_MAP_FILE"; exit 1; }
+      export GIT_AUTHOR_NAME="$(printf '%s' "$AUTHOR_LINE" | cut -d';' -f2)"
+      export GIT_AUTHOR_EMAIL="$(printf '%s' "$AUTHOR_LINE" | cut -d';' -f3)"
+      test -n "$GIT_AUTHOR_NAME" && test -n "$GIT_AUTHOR_EMAIL"
+    - test -d "$MOUNTED_1C_DIR"
+    - git config --global user.email "ci-bot@gitlab.com"
+    - git config --global user.name "GitLab CI Bot"
+    - git config --global core.quotepath false
+    - git remote set-url origin "https://gitlab-ci-token:${MY_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git"
+    - git fetch origin "$CI_COMMIT_REF_NAME"
+    - git checkout -B "$CI_COMMIT_REF_NAME" "origin/$CI_COMMIT_REF_NAME"
+    - rm -rf "$CF_REPO_DIR" "$CFE_REPO_DIR" "$EPF_REPO_DIR" "$ERF_REPO_DIR" "$SRC_REPO_DIR" "$TMP_UNPACKED_DIR"
+    - mkdir -p "$CF_REPO_DIR" "$CFE_REPO_DIR" "$EPF_REPO_DIR" "$ERF_REPO_DIR" "$SRC_REPO_DIR" "$TMP_UNPACKED_DIR"
+    - test -f ci/unpack_logic.sh
+    - sed -i 's/\r$//' ci/unpack_logic.sh
+    - bash ci/unpack_logic.sh "$MOUNTED_1C_DIR" "$CF_REPO_DIR" "$CFE_REPO_DIR" "$EPF_REPO_DIR" "$ERF_REPO_DIR" "$TMP_UNPACKED_DIR" "$SRC_REPO_DIR"
+    - test -n "$(find "$SRC_REPO_DIR" -type f -iname '*.bsl' -print -quit)"
+    - rm -rf "$TMP_UNPACKED_DIR"
+    - git add "$CF_REPO_DIR" "$CFE_REPO_DIR" "$EPF_REPO_DIR" "$ERF_REPO_DIR" "$SRC_REPO_DIR"
+    - |
+      if git diff --quiet --staged; then
+        echo "No changes to commit"
+      else
+        git commit --author="$GIT_AUTHOR_NAME <$GIT_AUTHOR_EMAIL>" -m "Auto-unpack ${CONFIG_NAME} from ${DEVELOPER_NAME} [skip ci]"
+        git push origin "HEAD:${CI_COMMIT_REF_NAME}"
+      fi
+  artifacts:
+    name: "v8unpack-${CONFIG_NAME}-${DEVELOPER_NAME}-${CI_COMMIT_REF_SLUG}-${CI_PIPELINE_ID}"
+    when: always
+    expire_in: 1 day
+    paths:
+      - cf/
+      - cfe/
+      - epf/
+      - erf/
+      - src/
+
+sonar-analysis:
+  stage: sonar-analysis
+  image:
+    name: docker.devops.stng.ru/devops/docker-images/sonar-scanner-cli:12
+    entrypoint: [""]
+  needs:
+    - job: unpack_job
+      artifacts: true
+  cache:
+    key: "sonar-cache-${CI_PROJECT_NAME}"
+    paths:
+      - .sonar/cache
+  rules: *pipeline_rules
+  before_script:
+    - set -euo pipefail
+    - |
+      SAFE_DEVELOPER_NAME="$(printf '%s' "$DEVELOPER_NAME" | sed 's/[^A-Za-z0-9_.:-]/_/g')"
+      SAFE_CONFIG_NAME="$(printf '%s' "$CONFIG_NAME" | sed 's/[^A-Za-z0-9_.:-]/_/g')"
+      export SONAR_PROJECT_KEY_VALUE="${SONAR_PROJECT_KEY:-${CI_PROJECT_PATH_SLUG}-${SAFE_CONFIG_NAME}-${SAFE_DEVELOPER_NAME}}"
+      export SONAR_PROJECT_NAME_VALUE="${CI_PROJECT_NAME} / ${CONFIG_NAME} / ${DEVELOPER_NAME}"
+    - |
+      if [ -n "${GIT_SSL_CAINFO:-}" ] && [ -f "$GIT_SSL_CAINFO" ]; then
+        rm -f "$SONAR_TRUSTSTORE_PATH"
+        keytool -importcert -alias sonarqube-ca -file "$GIT_SSL_CAINFO" -keystore "$SONAR_TRUSTSTORE_PATH" -storepass "$SONAR_TRUSTSTORE_PASSWORD" -noprompt
+        export SONAR_SCANNER_OPTS="-Djavax.net.ssl.trustStore=$SONAR_TRUSTSTORE_PATH -Djavax.net.ssl.trustStorePassword=$SONAR_TRUSTSTORE_PASSWORD"
+      fi
+  script:
+    - test -n "$(find src -type f -iname '*.bsl' -print -quit)"
+    - |
+      sonar-scanner \
+        -Dsonar.host.url="${SONAR_HOST_URL}" \
+        -Dsonar.token="${SONAR_TOKEN}" \
+        -Dsonar.projectKey="${SONAR_PROJECT_KEY_VALUE}" \
+        -Dsonar.projectName="${SONAR_PROJECT_NAME_VALUE}" \
+        -Dsonar.projectBaseDir="${CI_PROJECT_DIR}" \
+        -Dsonar.sources="src" \
+        -Dsonar.sourceEncoding="UTF-8" \
+        -Dsonar.scm.disabled=false \
+        -Dsonar.scanner.skipJreProvisioning=true \
+        -Dsonar.scanner.skipSecrets=true
+
+vanessa_tests:
+  stage: vanessa-test
+  timeout: 40m
+  image:
+    name: $VANESSA_IMAGE
+    entrypoint: [""]
+  needs:
+    - job: sonar-analysis
+      artifacts: false
+  rules: *pipeline_rules
+  before_script:
+    - set -euo pipefail
+    - command -v jq
+    - command -v import
+    - |
+      sed "s|/workspace|$CI_PROJECT_DIR|g" ci/VAParams.json > ci/VAParams.paths.json
+      jq --slurpfile clients "$VA_TEST_CLIENTS_FILE" '. + {"КаталогФич": (env.CI_PROJECT_DIR + "/features"), "ДанныеКлиентовТестирования": $clients[0]}' ci/VAParams.paths.json > ci/VAParams.ci.json
+      export VA_PARAMS="$CI_PROJECT_DIR/ci/VAParams.ci.json"
+      mkdir -p "$ALLURE_RESULTS_DIR" "$ALLURE_REPORT_DIR" "$VANESSA_LOG_DIR"
+    - export LIBGL_ALWAYS_SOFTWARE=1
+    - export GALLIUM_DRIVER=llvmpipe
+    - export NO_AT_BRIDGE=1
+    - rm -rf ~/.config/1C ~/.local/share/1C /tmp/.X11-unix
+  script:
+    - test -n "$(find features -type f -name '*.feature' -print -quit)"
+    - |
+      set +e
+      run-vanessa &
+      va_pid=$!
+      (
+        sleep 1500
+        if kill -0 "$va_pid" 2>/dev/null; then
+          display="$(ps -eo args | awk '/[X]vfb :/{print $2; exit}')"
+          auth="$(find /tmp -path '/tmp/xvfb-run.*/Xauthority' -print -quit)"
+          if [ -n "$display" ] && [ -n "$auth" ]; then
+            DISPLAY="$display" XAUTHORITY="$auth" import -window root "$CI_PROJECT_DIR/vanessa-logs/timeout-screen.png" || true
+          fi
+        fi
+      ) &
+      screenshot_pid=$!
+      wait "$va_pid"
+      status=$?
+      kill "$screenshot_pid" 2>/dev/null || true
+      wait "$screenshot_pid" 2>/dev/null || true
+      exit "$status"
+    - test -n "$(find allure-results -type f -name '*-result.json' -print -quit)"
+    - |
+      if grep -R -E '"status"[[:space:]]*:[[:space:]]*"(failed|broken|unknown)"' allure-results; then
+        echo "В Allure обнаружены непройденные тесты"
+        exit 1
+      fi
+  after_script:
+    - generate-allure-report || true
+  artifacts:
+    when: always
+    expire_in: 14 days
+    paths:
+      - allure-results/
+      - allure-report/
+      - vanessa-logs/
+
+publish_allure:
+  stage: publish
+  image:
+    name: $VANESSA_IMAGE
+    entrypoint: [""]
+  needs:
+    - job: vanessa_tests
+      artifacts: true
+  rules:
+    - if: '$RUN_SOURCE == "rundeck"'
+      when: always
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+      when: always
+    - when: never
+  before_script:
+    - set -euo pipefail
+    - command -v zip
+    - command -v jq
+    - command -v curl
+  script:
+    - |
+      if ! find allure-results -type f -name '*-result.json' -print -quit | grep -q .; then
+        echo "Нет результатов Allure для публикации"
+        exit 0
+      fi
+    - (cd allure-results && zip -qr ../allure-results.zip .)
+    - |
+      upload_response="$(curl --fail --silent --show-error --location --user "$ALLURE_SERVER_USER:$ALLURE_SERVER_PASSWORD" --form "allureResults=@allure-results.zip;type=application/zip" "$ALLURE_SERVER_URL/api/result")"
+      result_uuid="$(printf '%s' "$upload_response" | jq -r '.uuid')"
+      test -n "$result_uuid" && test "$result_uuid" != "null"
+    - |
+      report_request="$(jq -n --arg uuid "$result_uuid" --arg branch "$CI_COMMIT_REF_SLUG" --arg build "#$CI_PIPELINE_ID" '{reportSpec: {path: ["esed", $branch], executorInfo: {buildName: $build}}, results: [$uuid], deleteResults: true}')"
+      report_response="$(curl --fail --silent --show-error --location --user "$ALLURE_SERVER_USER:$ALLURE_SERVER_PASSWORD" --header "Content-Type: application/json" --data "$report_request" "$ALLURE_SERVER_URL/api/report")"
+      report_url="$(printf '%s' "$report_response" | jq -r '.latest // .url')"
+      echo "Allure report: $report_url"
