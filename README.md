@@ -50,17 +50,3 @@ DBus/Xvfb с timeout и пишет логи. Затем `generate-allure-report`
 `check-platform`, `check-vanessa-runner`, `check-vanessa-allure`, соответствующие
 `push-*` и `push-all`.
 
-Подробности: [архитектура](docs/architecture.md), [сборка](docs/build.md),
-[registry](docs/registry.md), [GitLab Runner](docs/gitlab-runner.md) и
-[решение проблем](docs/troubleshooting.md).
-
-Инструкции по развёртыванию и эксплуатации:
-
-- для администратора: [Markdown](docs/deployment-admin.md) и
-  [Word](docs/Инструкция_администратора_контур_качества_1С.docx);
-- для пользователя: [Markdown](docs/deployment-user.md) и
-  [Word](docs/Инструкция_пользователя_контур_качества_1С.docx).
-
-Общее устройство и функциональные возможности контура описаны в
-[архитектурной записке](docs/architecture-note.md). Также доступна
-[версия в формате Word](docs/Архитектурная_записка_контур_качества_1С.docx).
